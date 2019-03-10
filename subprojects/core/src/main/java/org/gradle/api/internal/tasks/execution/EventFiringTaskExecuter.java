@@ -57,11 +57,17 @@ public class EventFiringTaskExecuter implements TaskExecuter {
                     taskExecutionListener.beforeExecute(task);
                 } catch (Throwable t) {
                     state.setOutcome(new TaskExecutionException(task, t));
-                    return TaskExecuterResult.NO_REUSED_OUTPUT;
+                    return TaskExecuterResult.WITHOUT_OUTPUTS;
                 }
 
                 TaskExecuterResult result = delegate.execute(task, state, context);
-                operationContext.setResult(new ExecuteTaskBuildOperationResult(state, context, result.getReusedOutputOriginMetadata().orElse(null)));
+
+                operationContext.setResult(new ExecuteTaskBuildOperationResult(
+                    state,
+                    result.getReusedOutputOriginMetadata().orElse(null),
+                    result.executedIncrementally(),
+                    result.getExecutionReasons()
+                ));
 
                 try {
                     taskExecutionListener.afterExecute(task, state);

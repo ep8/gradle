@@ -28,6 +28,8 @@ import org.gradle.internal.change.SummarizingChangeContainer;
 import org.gradle.internal.execution.history.AfterPreviousExecutionState;
 import org.gradle.internal.execution.history.BeforeExecutionState;
 
+import java.util.Optional;
+
 public class DefaultExecutionStateChanges implements ExecutionStateChanges {
 
     private final AfterPreviousExecutionState previousExecution;
@@ -35,7 +37,7 @@ public class DefaultExecutionStateChanges implements ExecutionStateChanges {
     private final ChangeContainer allChanges;
     private final ChangeContainer rebuildTriggeringChanges;
 
-    public DefaultExecutionStateChanges(AfterPreviousExecutionState lastExecution, BeforeExecutionState thisExecution, Describable executable) {
+    public DefaultExecutionStateChanges(AfterPreviousExecutionState lastExecution, BeforeExecutionState thisExecution, Describable executable, boolean includeAddedOutputs) {
         this.previousExecution = lastExecution;
 
         // Capture changes in execution outcome
@@ -79,7 +81,8 @@ public class DefaultExecutionStateChanges implements ExecutionStateChanges {
             executable);
         OutputFileChanges uncachedOutputChanges = new OutputFileChanges(
             lastExecution.getOutputFileProperties(),
-            thisExecution.getOutputFileProperties());
+            thisExecution.getOutputFileProperties(),
+            includeAddedOutputs);
         ChangeContainer outputFileChanges = caching(uncachedOutputChanges);
 
         this.allChanges = errorHandling(executable, new SummarizingChangeContainer(previousSuccessState, implementationChanges, inputPropertyChanges, inputPropertyValueChanges, outputFilePropertyChanges, outputFileChanges, inputFilePropertyChanges, inputFileChanges));
@@ -95,10 +98,13 @@ public class DefaultExecutionStateChanges implements ExecutionStateChanges {
     }
 
     @Override
-    public Iterable<Change> getInputFilesChanges() {
+    public Optional<Iterable<Change>> getInputFilesChanges() {
+        if (isRebuildRequired()) {
+            return Optional.empty();
+        }
         CollectingChangeVisitor visitor = new CollectingChangeVisitor();
         inputFileChanges.accept(visitor);
-        return visitor.getChanges();
+        return Optional.of(visitor.getChanges());
     }
 
     @Override
@@ -106,8 +112,7 @@ public class DefaultExecutionStateChanges implements ExecutionStateChanges {
         allChanges.accept(visitor);
     }
 
-    @Override
-    public boolean isRebuildRequired() {
+    private boolean isRebuildRequired() {
         ChangeDetectorVisitor changeDetectorVisitor = new ChangeDetectorVisitor();
         rebuildTriggeringChanges.accept(changeDetectorVisitor);
         return changeDetectorVisitor.hasAnyChanges();
